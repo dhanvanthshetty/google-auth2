@@ -66,7 +66,7 @@ app.get('/auth/google/callback', passport.authenticate('google', { failureRedire
     res.send('You are logged in');
 });
 
-// Start server
+// Start server so we can start
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
