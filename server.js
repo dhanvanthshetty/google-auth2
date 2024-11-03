@@ -4,6 +4,8 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const mongoose = require('mongoose');
 const session = require('express-session');
+const bcrypt = require('bcrypt');
+const bodyParser = require('body-parser');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -18,7 +20,11 @@ const UserSchema = new mongoose.Schema({
     googleId: String,
     displayName: String,
     email: String,
+    password: String, // For email/password authentication
+    phone: String,
 });
+
+
 
 const User = mongoose.model('User', UserSchema);
 
@@ -50,7 +56,8 @@ passport.deserializeUser((id, done) => {
     });
 });
 
-
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(session({
     secret: 'secret_key',
     resave: false,
@@ -66,7 +73,80 @@ app.get('/auth/google/callback', passport.authenticate('google', { failureRedire
     res.send('You are logged in');
 });
 
+
+app.post('/signup', async (req, res) => {
+    console.log(req.body); 
+    const { name, email, phone, password } = req.body;
+
+    if (!password) {
+        return res.status(400).send('Password is required');
+    }
+
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
+        const user = new User({ 
+            displayName: name, 
+            email, 
+            phone, 
+            password: hashedPassword 
+        });
+        await user.save();
+
+        console.log('User created:', user);
+        res.send('User registered successfully!');
+    } catch (error) {
+        console.error('Error saving user:', error);
+        res.status(500).send('Internal server error');
+    }
+});
+
+
+
+
+app.post('/login', async (req, res) => {
+    console.log(req.body); 
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).send('Email and password are required');
+    }
+
+    try {
+        const user = await User.findOne({ email });
+        
+        console.log('Retrieved user:', user);
+
+        if (!user) {
+            return res.status(400).send('User not found');
+        }
+
+        if (!user.password) {
+            return res.status(500).send('Password not found for this user');
+        }
+
+        const isMatch = await bcrypt.compare(password, user.password);
+        
+        if (isMatch) {
+            req.login(user, (err) => {
+                if (err) return res.status(500).send('Login failed');
+                return res.send('You are logged in');
+            });
+        } else {
+            res.status(400).send('Invalid credentials');
+        }
+    } catch (error) {
+        console.error(error);
+        res.status(500).send('Internal server error');
+    }
+});
+
+
+
 // Start server so we can start
 app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
+    console.log(`Server is running on http://localhost:${PORT}${PORT}`);
 });
+
+
+
